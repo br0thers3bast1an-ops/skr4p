@@ -47,6 +47,8 @@
     #muterow{width:100%;max-width:700px;background:#0d0600;padding:4px 10px;display:flex;align-items:center;gap:8px;font-family:'Special Elite',monospace;font-size:10px;color:#a07030;border-top:1px solid #3a1800;flex-shrink:0}
     #mutebtn{background:#1a0d00;border:1px solid #5a3a10;color:#f5d77e;font-family:'Special Elite',monospace;font-size:10px;padding:4px 8px;cursor:pointer;border-radius:3px;min-height:28px;touch-action:auto}
     #vol,#sfxvol{width:60px;accent-color:#ffd700;flex-shrink:0;touch-action:auto}
+    @keyframes goldpulse{0%,100%{box-shadow:0 0 0 0 rgba(255,215,0,0.7);border-color:#ffd700}50%{box-shadow:0 0 0 8px rgba(255,215,0,0);border-color:#fff5b0}}
+    .gold-nudge{animation:goldpulse 0.7s ease-in-out infinite}
   </style>
 </head>
 <body>
@@ -286,15 +288,15 @@ function initAllies(){
 }
 
 var PERKS=[
-  {id:'spread',   n:'Spread Shot',   d:'3-bullet fan per shot',           ico:'🔱',stack:false},
+  {id:'spread',   n:'Spread Shot',   d:'3-bullet fan (side shots -30% dmg)', ico:'🔱',stack:false},
   {id:'speed',    n:'Quick Draw',    d:'Fire 40% faster (stacks)',         ico:'⚡',stack:true},
   {id:'pierce',   n:'Silver Bullet', d:'Bullets pierce enemies',           ico:'🔫',stack:false},
   {id:'big',      n:'Cannonball',    d:'2x bullet size & damage',          ico:'💣',stack:false},
   {id:'magnet',   n:'Lasso Pull',    d:'Pickups pulled to you',            ico:'🧲',stack:false},
   {id:'life',     n:'Second Wind',   d:'+1 life (up to 9)',                ico:'❤️',stack:true},
   {id:'slow',     n:'Molasses Hex',  d:'Enemies 25% slower (stacks)',      ico:'🐌',stack:true},
-  {id:'bounce',   n:'Ricochet',      d:'Bullets bounce off walls',         ico:'↔️',stack:false},
-  {id:'triple',   n:'Triple Tap',    d:'3 rapid burst shots',              ico:'🎯',stack:false},
+  {id:'bounce',   n:'Ricochet',      d:'Bullets bounce twice & hit harder',ico:'↔️',stack:false},
+  {id:'triple',   n:'Triple Tap',    d:'3-shot fanned burst, fires faster',ico:'🎯',stack:false},
   {id:'ghost',    n:'Ghost Round',   d:'Bullets pass through all',         ico:'👻',stack:false},
   {id:'fury',     n:'Outlaw Fury',   d:'2x fire rate (stacks)',            ico:'🔥',stack:true},
   {id:'backstep', n:'Sidestep',      d:'Move 50% faster (stacks)',         ico:'💨',stack:true},
@@ -308,6 +310,7 @@ var PERKS=[
 var px,py,bullets,ebullets,enemies,drops,perks,perkCounts;
 var score,wave,lives,mutlv,shieldT,fireCD,flash,shake,boss,waveOver;
 var toughHP,nukeCount,goldBank,leechStack,slowStack,speedStack,furyStack,stepStack,burstQueue,burstTimer;
+var bossCountdown=0, goldNudgeShown=false, goldFirstNudgeTick=0;
 
 var stars=[];
 for(var i=0;i<120;i++) stars.push({x:Math.random()*W,y:Math.random()*H*0.75,sp:0.02+Math.random()*0.05,r:Math.random()<0.12?2:1});
@@ -323,13 +326,14 @@ function reset(){
   shieldT=0;fireCD=0;flash=0;shake=0;boss=null;waveOver=false;
   toughHP=0;nukeCount=0;goldBank=0;leechStack=0;slowStack=0;speedStack=0;furyStack=0;stepStack=0;
   burstQueue=0;burstTimer=0;lastShotTick=-99;
+  bossCountdown=0;goldNudgeShown=false;goldFirstNudgeTick=0;
   tick=0;fireIntensity=0;
   initAllies(); spawnWave(); hud();
 }
 
 function spawnWave(){
   enemies=[];ebullets=[];boss=null;waveOver=false;
-  if(wave%5===0){ spawnBoss(); sfxBossWarning(); return; }
+  if(wave%5===0){ bossCountdown=600; showBanner('⚠ BOSS INCOMING ⚠'); sfxBossWarning(); return; }
   var rows=Math.min(2+Math.floor(wave/2),6), cols=Math.min(6+Math.floor(wave/3),12), gx=(W-80)/cols;
   for(var r=0;r<rows;r++) for(var c=0;c<cols;c++){
     var tier=r<2?0:r<4?1:2, h=1+tier+(mutlv>2?1:0), spd=(0.5+wave*0.07)*(c%2===0?1:-1), seed=(r*100+c*7+wave*13)%100;
@@ -343,15 +347,15 @@ function spawnBoss(){
 
 
 function buildVolley(){
-  var bArr=[], baseAngles=[0];
-  if(hp('multishot')) baseAngles=[-0.4,-0.2,0,0.2,0.4];
-  else if(hp('spread')) baseAngles=[-0.22,0,0.22];
+  var bArr=[], baseAngles=[0], baseDmg=[1];
+  if(hp('multishot')){ baseAngles=[-0.4,-0.2,0,0.2,0.4]; baseDmg=[0.85,0.85,1,0.85,0.85]; }
+  else if(hp('spread')){ baseAngles=[-0.22,0,0.22]; baseDmg=[0.7,1,0.7]; }
   for(var i=0;i<baseAngles.length;i++)
-    bArr.push({x:px,y:py-30,dx:Math.sin(baseAngles[i])*4,dy:-10,bc:false,homing:hp('homing')});
+    bArr.push({x:px,y:py-30,dx:Math.sin(baseAngles[i])*4,dy:-10,bc:0,homing:hp('homing'),dmgMul:baseDmg[i]});
   return bArr;
 }
 function shootP(){ var v=buildVolley(); for(var i=0;i<v.length;i++) bullets.push(v[i]); if(tick-lastShotTick>4){ sfxShoot(); lastShotTick=tick; } }
-function triggerBurst(){ burstQueue=2; burstTimer=6; }
+function triggerBurst(){ burstQueue=2; burstTimer=4; }
 
 function eFire(e){
   e.fcd--; if(e.fcd>0) return;
@@ -493,9 +497,10 @@ function update(){
     // Diminishing returns: each speed stack gives 4/3/2/2/2... frames, each fury 6/5/4/3/3...
     var speedBonus=0; for(var _s=0;_s<speedStack;_s++) speedBonus+=Math.max(2,4-Math.floor(_s/2));
     var furyBonus=0;  for(var _f=0;_f<furyStack;_f++)  furyBonus+=Math.max(3,6-_f);
-    var fr=Math.max(6,30-speedBonus-furyBonus);
+    var tripleBonus=hp('triple')?4:0;
+    var fr=Math.max(6,30-speedBonus-furyBonus-tripleBonus);
     if(goShoot&&fireCD<=0){ shootP(); if(hp('triple'))triggerBurst(); fireCD=fr; }
-    if(burstQueue>0){burstTimer--;if(burstTimer<=0){shootP();burstQueue--;burstTimer=6;}}
+    if(burstQueue>0){burstTimer--;if(burstTimer<=0){shootP();burstQueue--;burstTimer=4;}}
   }
   if(shieldT>0) shieldT--;
 
@@ -514,9 +519,9 @@ function update(){
   var nb=[];
   for(var i=0;i<bullets.length;i++){
     var b=bullets[i]; b.x+=b.dx; b.y+=b.dy;
-    if(hp('bounce')&&!b.bc&&(b.x<0||b.x>W)){b.dx*=-1;b.bc=true;}
+    if(hp('bounce')&&(b.bc||0)<2&&(b.x<0||b.x>W)){ b.dx*=-1; b.bc=(b.bc||0)+1; }
     if(b.y<-10||b.x<-10||b.x>W+10) continue;
-    var used=false,dmg=hp('big')?2:1,pierce=hp('pierce')||hp('ghost');
+    var used=false,dmg=(hp('big')?2:1)*(b.dmgMul||1)*((b.bc||0)>0?1.25:1),pierce=hp('pierce')||hp('ghost');
     if(boss){
       if(d2(b.x,b.y,boss.x,boss.y)<54*54){
         boss.hp-=dmg;score+=Math.round(waveBaseScore(wave)*4);shake=4;
@@ -554,6 +559,11 @@ function update(){
 
   if(boss){
     boss.ph+=0.02;boss.x=W/2+Math.sin(boss.ph)*170;boss.y=85+Math.sin(boss.ph*0.6)*20;bFire();
+  } else if(bossCountdown>0){
+    bossCountdown--;
+    var secsLeft=Math.ceil(bossCountdown/60);
+    if(bossCountdown%60===0 && secsLeft>0){ showBanner('⚠ BOSS INCOMING — '+secsLeft+'s ⚠'); if(secsLeft<=3) sfxBossWarning(); }
+    if(bossCountdown<=0){ spawnBoss(); showBanner('⚔ BOSS WAVE ⚔'); }
   } else {
     if(enemies.length===0&&!waveOver){waveOver=true;sfxWaveComplete();openPerks();return;}
     var minX=W,maxX=0;
@@ -580,7 +590,17 @@ function update(){
       if(d.type==='life'&&lives<9){lives++;showBanner('+1 LIFE');}
       else if(d.type==='shield'){shieldT=MAX_SHIELD;showBanner('SHIELD ON');}
       else if(d.type==='bomb'){nukeCount++;showBanner('DYNAMITE x'+nukeCount+' — press N!');}
-      else if(d.type==='score'){goldBank++;showBanner('GOLD! '+goldBank+' in bank — upgrade an ally via U key or 🔧');}
+      else if(d.type==='score'){
+        goldBank++;
+        if(!goldNudgeShown){
+          goldNudgeShown=true;
+          showBanner('🪙 GOLD! Tap the 🔧 button (or press U) to upgrade an ally turret!');
+          bannerTick=240;
+          goldFirstNudgeTick=16;
+        } else {
+          showBanner('GOLD! '+goldBank+' in bank — upgrade an ally via U key or 🔧');
+        }
+      }
       hud(); continue;
     }
     if(d.y<H+20&&d.t>0) nd.push(d);
@@ -869,6 +889,13 @@ function draw(){
   if(mutlv>0){ ctx.fillStyle='rgba(160,50,255,'+Math.min(0.04+mutlv*0.035,0.2)+')'; ctx.fillRect(0,0,W,H); }
   if(nukeCount>0){ ctx.fillStyle='#ff8800'; ctx.font='11px "Special Elite",monospace'; ctx.textAlign='left'; ctx.fillText('💣 x'+nukeCount+' (N)',8,H-20); }
   if(goldBank>0){ ctx.fillStyle='#ffd700'; ctx.font='11px "Special Elite",monospace'; ctx.textAlign='left'; ctx.fillText('🪙 x'+goldBank+' gold (U/🔧)',8,H-6); }
+  if(bossCountdown>0){
+    var bcSecs=Math.ceil(bossCountdown/60);
+    ctx.fillStyle='rgba(255,60,0,'+(0.6+Math.sin(tick*0.2)*0.2)+')';
+    ctx.font='bold 13px "Rye",serif'; ctx.textAlign='right';
+    ctx.fillText('BOSS IN '+bcSecs+'s',W-10,24);
+    ctx.textAlign='left';
+  }
   ctx.restore();
 }
 
@@ -965,7 +992,11 @@ upgbtn.title='Upgrade nearest ally (costs 1 gold)';
 document.getElementById('controls').appendChild(upgbtn);
 upgbtn.addEventListener('touchstart',function(e){e.preventDefault();if(goldBank>0&&running){var ni=nearestAlly();if(ni!==null)upgradeAlly(ni);}},{passive:false});
 upgbtn.addEventListener('click',function(){if(goldBank>0&&running){var ni=nearestAlly();if(ni!==null)upgradeAlly(ni);}});
-setInterval(function(){upgbtn.style.display=(goldBank>0&&running)?'flex':'none';},250);
+setInterval(function(){
+  upgbtn.style.display=(goldBank>0&&running)?'flex':'none';
+  if(goldFirstNudgeTick>0){ goldFirstNudgeTick--; upgbtn.classList.add('gold-nudge'); }
+  else upgbtn.classList.remove('gold-nudge');
+},250);
 
 // Dynamite button (appears when you have nukes)
 var nukebtn=document.createElement('button');
