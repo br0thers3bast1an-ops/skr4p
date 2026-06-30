@@ -337,7 +337,8 @@ function spawnWave(){
   var rows=Math.min(2+Math.floor(wave/2),6), cols=Math.min(6+Math.floor(wave/3),12), gx=(W-80)/cols;
   for(var r=0;r<rows;r++) for(var c=0;c<cols;c++){
     var earlyEase=wave<=3?0.45+wave*0.1:1;
-    var tier=r<2?0:r<4?1:2, h=1+tier+(mutlv>2?1:0), spd=(0.5+wave*0.07)*earlyEase*(c%2===0?1:-1), seed=(r*100+c*7+wave*13)%100;
+    var midTighten=(wave>=5&&wave<=9)?1+(0.12-Math.abs(wave-7)*0.03):1;
+    var tier=r<2?0:r<4?1:2, h=1+tier+(mutlv>2?1:0), spd=(0.5+wave*0.07)*earlyEase*midTighten*(c%2===0?1:-1), seed=(r*100+c*7+wave*13)%100;
     enemies.push({x:40+c*gx+gx/2,y:34+r*44,hp:h,mhp:h,tier:tier,spd:spd,fcd:60+Math.random()*100,ph:Math.random()*6.28,seed:seed});
   }
 }
@@ -361,7 +362,8 @@ function triggerBurst(){ burstQueue=2; burstTimer=4; }
 function eFire(e){
   e.fcd--; if(e.fcd>0) return;
   var earlyFireEase=wave<=3?1.6-wave*0.15:1;
-  var rate=Math.max(20,72-wave*2)*earlyFireEase*(1+slowStack*0.4);
+  var midFireTighten=(wave>=5&&wave<=9)?1-(0.09-Math.abs(wave-7)*0.022):1;
+  var rate=Math.max(20,72-wave*2)*earlyFireEase*midFireTighten*(1+slowStack*0.4);
   e.fcd=rate*(0.6+Math.random()*0.8);
   if(mutlv>=3){ for(var i=0;i<4;i++){ var a=i*1.5708+tick*0.012; ebullets.push({x:e.x,y:e.y,dx:Math.cos(a)*2.6,dy:Math.sin(a)*2.6}); } }
   else if(mutlv>=2){ [-0.28,0,0.28].forEach(function(a){ ebullets.push({x:e.x,y:e.y,dx:Math.sin(a)*2,dy:3.2}); }); }
