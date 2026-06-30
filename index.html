@@ -65,7 +65,7 @@
     <div id="banner"></div>
     <div id="overlay">
       <h2>SKR4P</h2>
-      <p>Arrows / A·D to move &nbsp;·&nbsp; Space to shoot<br>Touch buttons below on mobile<br>Boss every 5 waves &nbsp;·&nbsp; Perks between waves</p>
+      <p>Arrows / A·D to move &nbsp;·&nbsp; Space to shoot<br>Touch buttons below on mobile<br>Boss every 5 waves &nbsp;·&nbsp; Perks between waves<br><b style="color:#ffd700">Collect <span style="color:#ffd700">$</span> gold to upgrade your ally turrets — tap 🔧 or press U</b><br><b style="color:#ff8800">Collect <span style="color:#ff8800">B</span> dynamite to clear the screen — tap 💣 or press N</b></p>
       <table id="lbtbl"><tbody id="lbbody"></tbody></table>
       <button id="startbtn">DRAW IRON</button>
     </div>
@@ -307,7 +307,7 @@ var PERKS=[
   {id:'tough',    n:'Iron Hide',     d:'Absorb 1 extra hit',              ico:'🛡',stack:true},
 ];
 
-var px,py,bullets,ebullets,enemies,drops,perks,perkCounts;
+var px=350,py=432,bullets=[],ebullets=[],enemies=[],drops=[],perks=[],perkCounts={};
 var score,wave,lives,mutlv,shieldT,fireCD,flash,shake,boss,waveOver;
 var toughHP,nukeCount,goldBank,leechStack,slowStack,speedStack,furyStack,stepStack,burstQueue,burstTimer;
 var bossCountdown=0, goldNudgeShown=false, goldFirstNudgeTick=0;
@@ -336,7 +336,8 @@ function spawnWave(){
   if(wave%5===0){ bossCountdown=600; showBanner('⚠ BOSS INCOMING ⚠'); sfxBossWarning(); return; }
   var rows=Math.min(2+Math.floor(wave/2),6), cols=Math.min(6+Math.floor(wave/3),12), gx=(W-80)/cols;
   for(var r=0;r<rows;r++) for(var c=0;c<cols;c++){
-    var tier=r<2?0:r<4?1:2, h=1+tier+(mutlv>2?1:0), spd=(0.5+wave*0.07)*(c%2===0?1:-1), seed=(r*100+c*7+wave*13)%100;
+    var earlyEase=wave<=3?0.45+wave*0.1:1;
+    var tier=r<2?0:r<4?1:2, h=1+tier+(mutlv>2?1:0), spd=(0.5+wave*0.07)*earlyEase*(c%2===0?1:-1), seed=(r*100+c*7+wave*13)%100;
     enemies.push({x:40+c*gx+gx/2,y:34+r*44,hp:h,mhp:h,tier:tier,spd:spd,fcd:60+Math.random()*100,ph:Math.random()*6.28,seed:seed});
   }
 }
@@ -359,7 +360,8 @@ function triggerBurst(){ burstQueue=2; burstTimer=4; }
 
 function eFire(e){
   e.fcd--; if(e.fcd>0) return;
-  var rate=Math.max(20,72-wave*2)*(1+slowStack*0.4);
+  var earlyFireEase=wave<=3?1.6-wave*0.15:1;
+  var rate=Math.max(20,72-wave*2)*earlyFireEase*(1+slowStack*0.4);
   e.fcd=rate*(0.6+Math.random()*0.8);
   if(mutlv>=3){ for(var i=0;i<4;i++){ var a=i*1.5708+tick*0.012; ebullets.push({x:e.x,y:e.y,dx:Math.cos(a)*2.6,dy:Math.sin(a)*2.6}); } }
   else if(mutlv>=2){ [-0.28,0,0.28].forEach(function(a){ ebullets.push({x:e.x,y:e.y,dx:Math.sin(a)*2,dy:3.2}); }); }
@@ -595,8 +597,8 @@ function update(){
         if(!goldNudgeShown){
           goldNudgeShown=true;
           showBanner('🪙 GOLD! Tap the 🔧 button (or press U) to upgrade an ally turret!');
-          bannerTick=240;
-          goldFirstNudgeTick=16;
+          bannerTick=420;
+          goldFirstNudgeTick=40;
         } else {
           showBanner('GOLD! '+goldBank+' in bank — upgrade an ally via U key or 🔧');
         }
@@ -922,7 +924,10 @@ function openPerks(){
   picks.forEach(function(pk){
     var owned=perkCounts[pk.id]||0;
     var d=document.createElement('div'); d.className='pcard';
-    d.innerHTML='<span class="pico">'+pk.ico+'</span><b>'+pk.n+(owned>0?' x'+(owned+1):'')+'</b><span>'+pk.d+'</span>';
+    var dimNote='';
+    if(pk.id==='speed'&&owned>0){ var nextGain=Math.max(2,4-Math.floor(owned/2)); dimNote='<br><i style="color:#7a5a20;font-size:9px">next stack: +'+nextGain+'f (falling off)</i>'; }
+    if(pk.id==='fury'&&owned>0){ var nextGain=Math.max(3,6-owned); dimNote='<br><i style="color:#7a5a20;font-size:9px">next stack: +'+nextGain+'f (falling off)</i>'; }
+    d.innerHTML='<span class="pico">'+pk.ico+'</span><b>'+pk.n+(owned>0?' x'+(owned+1):'')+'</b><span>'+pk.d+dimNote+'</span>';
     d.onclick=function(){
       if(perks.indexOf(pk.id)<0) perks.push(pk.id);
       perkCounts[pk.id]=(perkCounts[pk.id]||0)+1;
